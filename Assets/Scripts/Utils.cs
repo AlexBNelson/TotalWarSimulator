@@ -598,7 +598,7 @@ public static class Utils
     }
 
 
-
+    public enum BattleState { VICTORY, DEFEAT, ONGOING }
 
     static Texture2D _whiteTexture;
     public static Texture2D WhiteTexture

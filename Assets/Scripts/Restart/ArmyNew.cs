@@ -13,6 +13,9 @@ using UnityEngine;
 using static MeleeStats;
 using static RangedStats;
 using static Utils;
+using Restart.Models;
+using UnityEngine.Networking;
+using System.Text;
 
 
 [System.Serializable]
@@ -30,6 +33,7 @@ public class ArmyNew : MonoBehaviour
 
     public ArmyRole role;
     public GameObject selectionCirclePrefab;
+    // Is combactManager even used?
     public CombactManager combactManager;
     public Transform soldiersHolder;
     public Transform pathCreatorsHolder;
@@ -59,7 +63,7 @@ public class ArmyNew : MonoBehaviour
     {
         get { return "unit" + ((int)role + 1); }
     }
-
+    
 
 
     private void OnDrawGizmos()
@@ -86,13 +90,14 @@ public class ArmyNew : MonoBehaviour
     float clusterWidth;
     UnitNew u;
     Polygon geom;
+    
     private void CheckPartitions()
     {
         tempList.Clear();
 
         GUI.color = Color.yellow;
 
-
+        // Density-Based Spatial Clustering of Applications with Noise
         var simpleDbscan = new DbscanAlgorithm<Tuple<UnitNew,Vector3>>((v1, v2) => Vector3.SqrMagnitude(v1.Item2-v2.Item2));
         var result = simpleDbscan.ComputeClusterDbscan(units.Select(u => new Tuple<UnitNew, Vector3>(u, u.position)).ToArray(), epsilon: epsClust, minimumPoints: 1);
 
@@ -430,7 +435,145 @@ public class ArmyNew : MonoBehaviour
         rb.useGravity = false;
     }
 
+  // RL INTEGRATION CODE BELOW
+    private bool episodeOver = false;
 
+    private BattleState battleState = BattleState.ONGOING;
+
+
+    // URL to your Flask server
+    private string baseUrl = "http://127.0.0.1:5000";
+
+    void Start()
+    {
+        // Start the first interaction with the Python agent
+       // StartCoroutine(SendStep(units, enemy.units));
+    }
+
+    void Update()
+    {
+        // Assume this is the attacker
+        if (units.Count == 0)
+        {
+            // Send final reward once at the end
+            StartCoroutine(SendEndEpisode());
+            battleState = BattleState.DEFEAT;
+            episodeOver = true;
+        }
+
+        if (enemy.units.Count == 0)
+        {
+            // Send final reward once at the end
+            StartCoroutine(SendEndEpisode());
+            battleState = BattleState.VICTORY;
+            episodeOver = true;
+        }
+        
+
+        // Send step data to Flask
+        if (!episodeOver)
+        {
+            StartCoroutine(SendStep(units, enemy.units));
+        }
+        else
+        {
+            // Send final reward once at the end
+            StartCoroutine(SendEndEpisode());
+            episodeOver = false;
+        }
+          
+    }
+
+    IEnumerator SendStep(List<UnitNew> alliedUnits, List<UnitNew> enemyUnits)
+    {
+        var alliedUnitSteps = alliedUnits.Select(u => new UnitStep
+        {
+            id = u.ID,
+            commandedTarget = u.commandTarget != null ? u.commandTarget.ID : -1,
+            fightingTarget = u.fightingTarget != null ? u.fightingTarget.ID : -1,
+            numCols = u.numCols,
+            movementState = (int)u.movementState,
+            state = (int)u.state,
+            combactState = (int)u.combactState,
+            position = new Vector3(u.position.x, u.position.y, u.position.z)
+        }).ToList();
+
+        var enemyUnitSteps = enemyUnits.Select(u => new UnitStep
+        {
+            id = u.ID,
+            commandedTarget = u.commandTarget != null ? u.commandTarget.ID : -1,
+            fightingTarget = u.fightingTarget != null ? u.fightingTarget.ID : -1,
+            numCols = u.numCols,
+            movementState = (int)u.movementState,
+            state = (int)u.state,
+            combactState = (int)u.combactState,
+            position = new Vector3(u.position.x, u.position.y, u.position.z)
+        }).ToList();
+        // Build JSON payload
+        var stepData = new Dictionary<string, object>
+        {
+            {"allies", new List<UnitStep>[] {alliedUnitSteps}},
+            {"enemies", new List<UnitStep>[] {enemyUnitSteps}}
+        };
+
+        string json = JsonUtility.ToJson(new Wrapper<Dictionary<string, object>>(stepData));
+
+        using (UnityWebRequest request = new UnityWebRequest(baseUrl + "/step", "POST"))
+        {
+            byte[] bodyRaw = Encoding.UTF8.GetBytes(json);
+            request.uploadHandler = new UploadHandlerRaw(bodyRaw);
+            request.downloadHandler = new DownloadHandlerBuffer();
+            request.SetRequestHeader("Content-Type", "application/json");
+
+            yield return request.SendWebRequest();
+
+            // if (request.result == UnityWebRequest.Result.Success)
+            // {
+            //     // do nothing for now
+            // }
+            // else
+            // {
+            //     Debug.LogError("Step error: " + request.error);
+            // }
+        }
+    }
+
+    IEnumerator SendEndEpisode()
+    {
+        float finalReward = battleState == BattleState.VICTORY ? 1.0f : -1.0f;
+        var data = new FinalRewardData { final_reward = finalReward };
+        string json = JsonUtility.ToJson(data);
+
+        using (UnityWebRequest request = new UnityWebRequest(baseUrl + "/end_episode", "POST"))
+        {
+            byte[] bodyRaw = Encoding.UTF8.GetBytes(json);
+            request.uploadHandler = new UploadHandlerRaw(bodyRaw);
+            request.downloadHandler = new DownloadHandlerBuffer();
+            request.SetRequestHeader("Content-Type", "application/json");
+
+            yield return request.SendWebRequest();
+
+            // if (request.result == UnityWebRequest.Result.Success)
+            // {
+            //     Debug.Log("Episode complete: " + request.downloadHandler.text);
+            // }
+            // else
+            // {
+            //     Debug.LogError("End episode error: " + request.error);
+            // }
+        }
+    }
+
+
+    // Helper wrapper so Unity’s JsonUtility can handle dictionaries
+    [System.Serializable]
+    private class Wrapper<T> { public T data; public Wrapper(T d) { data = d; } }
+
+    [System.Serializable]
+    private class StepResponse { public int next_action; }
+
+    [System.Serializable]
+    private class FinalRewardData { public float final_reward; }
 
 
 
