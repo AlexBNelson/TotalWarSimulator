@@ -1,14 +1,23 @@
 # agent.py
+import keras
 import numpy as np
 import tensorflow as tf
 from tensorflow.keras import layers, models, optimizers
 
 class DQNAgent:
+    ARMY_SIZE = 11
+
     def __init__(self, state_dim, action_dim, lr=0.001, gamma=0.95):
         self.state_dim = state_dim
         self.action_dim = action_dim
         self.gamma = gamma
-        self.model = self._build_model(lr)
+        try:
+            model = keras.models.load_model("rl_model")
+        except Exception as e:
+            model = self._build_model(lr)
+        
+        self.model = model
+        
         self.episode_memory = []  # stores {"state", "action", "reward"}
 
     def _build_model(self, lr):
@@ -65,4 +74,25 @@ class DQNAgent:
 
         # Fit the model
         self.model.fit(np.array(states), np.array(targets), verbose=0)
+        
+        self.model.save("rl_model")
         self.episode_memory.clear()
+
+    def decode_action(action_id, unit, enemies):
+        # think about invalid states
+        if action_id == 0:
+            unit.movementState = IDLE
+
+        elif action_id == 1:
+            direction = action_id - 1
+            unit.movementState = MOVING
+            move_unit(unit, direction)
+
+        elif 2 <= action_id <= 2+DQNAgent.ARMY_SIZE - 1:
+            enemy_index = action_id - 2
+            if enemy_index < len(enemies):
+                unit.commandUnit = enemies[enemy_index].id
+                unit.combactState = ATTACKING
+
+        elif action_id == 2 + DQNAgent.ARMY_SIZE:
+            unit.movementState = ESCAPING

@@ -19,8 +19,8 @@ episode_memory = []
 @app.route("/step", methods=["POST"])
 def step():
     data = request.get_json()
-    allies = np.array(data["allies"], dtype=ArmyUnit)
-    enemies = np.array(data["enemies"], dtype=ArmyUnit)
+    allies = np.array(data["alliedUnitSteps"], dtype=ArmyUnit)
+    enemies = np.array(data["enemyUnitSteps"], dtype=ArmyUnit)
     # Store experience (no training yet)
     episode_memory.append((allies, enemies))
 
@@ -29,6 +29,12 @@ def step():
 
 @app.route("/health", methods=["GET"])
 def health_check():
+    return jsonify({"status": "healthy"})
+
+@app.route("/next_step", methods=["POST"])
+def next_step():
+    data = request.get_json()
+    agent.act(data["state"])
     return jsonify({"status": "healthy"})
 
 @app.route("/end_episode", methods=["POST"])

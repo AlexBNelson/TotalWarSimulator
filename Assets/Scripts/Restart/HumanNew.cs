@@ -42,6 +42,8 @@ public class HumanNew : MonoBehaviour
     {
         allUnits = LayerMask.GetMask(armies[0].allyUnitLayer, armies[1].allyUnitLayer);
         StartCoroutine(DrawRangedUnitsShaderCO());
+        
+        MoveAI();
     }
 
 
@@ -75,10 +77,6 @@ public class HumanNew : MonoBehaviour
                 u.lr.enabled = false;
 
 
-
-
-
-
         if (!selectedUnit) return;
 
 
@@ -106,10 +104,11 @@ public class HumanNew : MonoBehaviour
             }
         }
 
+        
+        MoveAI();
 
         if (Input.GetMouseButtonDown(1) && !Input.GetKey(KeyCode.LeftShift))
             StartCoroutine(RMBUpCO());
-
 
         if (Input.GetKeyDown(KeyCode.R))
             SceneManager.LoadScene(SceneManager.GetActiveScene().name);
@@ -117,6 +116,28 @@ public class HumanNew : MonoBehaviour
         if (Input.GetKeyDown(KeyCode.Escape))
             Application.Quit();
 
+    }
+
+    int aiMoveCounter = 0;
+    int aiCurrentUnitIndex = 0;
+
+    void MoveAI()
+    {
+        // move one ai unit randomly every 10 frames
+        if (aiMoveCounter % 10 == 0)
+        {
+            
+            var enemyArmy = armies[(int)team == 0 ? 1 : 0];
+            if (enemyArmy.units.Count == 0) return;
+
+            var aiUnit = enemyArmy.units[aiCurrentUnitIndex];
+            Vector3 randomPos = aiUnit.transform.position + new Vector3(Random.Range(-20f, 20f), 0, Random.Range(-20f, 20f));
+            aiUnit.cunit.MoveAt(randomPos);
+            RenderPath(aiUnit.cunit);
+
+            aiCurrentUnitIndex = (aiCurrentUnitIndex + 1) % enemyArmy.units.Count;
+        }
+        aiMoveCounter++;
     }
 
     private IEnumerator DrawRangedUnitsShaderCO()

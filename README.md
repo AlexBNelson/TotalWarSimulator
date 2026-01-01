@@ -1,5 +1,30 @@
 # Total War: AI
 
+To debug, use the run in unity editor and use 'attach unity debugger' command
+Then run netserver.py in the python debugger
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+*********** Previous Readme 
+
+
 Total War: AI is a research project of the [Game AI group](https://gaigresearch.github.io/) at Queen Mary University of London.
 
 The current objectives are:

@@ -7,6 +7,7 @@ namespace Restart.Models
         public UnitStep[] enemies;
     }
 
+    [System.Serializable]
     public class UnitStep
     {
         // Probably needs ID

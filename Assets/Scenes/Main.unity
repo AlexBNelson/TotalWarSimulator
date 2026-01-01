@@ -227,7 +227,6 @@ MonoBehaviour:
   role: 1
   selectionCirclePrefab: {fileID: 166266, guid: dc884a6ec589ce249acc9b5326859165,
     type: 3}
-  combactManager: {fileID: 0}
   soldiersHolder: {fileID: 1482037017}
   pathCreatorsHolder: {fileID: 1031378450}
   enemy: {fileID: 770727170}
@@ -251,7 +250,7 @@ MonoBehaviour:
     rangedStats: {fileID: 846338316}
   epsClust: 85
   expansion: 1
-  DEBUG_MODE: 0
+  DEBUG_MODE: 1
   units: []
   infantryUnits: []
   cavalryUnits: []
@@ -633,7 +632,6 @@ MonoBehaviour:
   role: 0
   selectionCirclePrefab: {fileID: 166266, guid: dc884a6ec589ce249acc9b5326859165,
     type: 3}
-  combactManager: {fileID: 0}
   soldiersHolder: {fileID: 1482037017}
   pathCreatorsHolder: {fileID: 1031378450}
   enemy: {fileID: 309878040}
@@ -657,7 +655,7 @@ MonoBehaviour:
     rangedStats: {fileID: 846338316}
   epsClust: 85
   expansion: 1
-  DEBUG_MODE: 0
+  DEBUG_MODE: 1
   units: []
   infantryUnits: []
   cavalryUnits: []

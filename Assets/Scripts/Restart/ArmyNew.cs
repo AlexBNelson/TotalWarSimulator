@@ -16,6 +16,7 @@ using static Utils;
 using Restart.Models;
 using UnityEngine.Networking;
 using System.Text;
+using UnityEngine.SceneManagement;
 
 
 [System.Serializable]
@@ -33,8 +34,6 @@ public class ArmyNew : MonoBehaviour
 
     public ArmyRole role;
     public GameObject selectionCirclePrefab;
-    // Is combactManager even used?
-    public CombactManager combactManager;
     public Transform soldiersHolder;
     public Transform pathCreatorsHolder;
     public ArmyNew enemy;
@@ -66,22 +65,6 @@ public class ArmyNew : MonoBehaviour
     
 
 
-    private void OnDrawGizmos()
-    {
-        if(!Application.isPlaying)
-        {
-            InstantiateArmy(true);
-            partions = new List<List<UnitNew>>();
-            partions.Add(units);
-        }
-        else
-        {
-            //CheckPartitions();
-        }
-
-    }
-
-
     List<UnitNew> tempList = new List<UnitNew>();
     Vector3 clusterPos;
     int totalSoldiers;
@@ -90,85 +73,6 @@ public class ArmyNew : MonoBehaviour
     float clusterWidth;
     UnitNew u;
     Polygon geom;
-    
-    private void CheckPartitions()
-    {
-        tempList.Clear();
-
-        GUI.color = Color.yellow;
-
-        // Density-Based Spatial Clustering of Applications with Noise
-        var simpleDbscan = new DbscanAlgorithm<Tuple<UnitNew,Vector3>>((v1, v2) => Vector3.SqrMagnitude(v1.Item2-v2.Item2));
-        var result = simpleDbscan.ComputeClusterDbscan(units.Select(u => new Tuple<UnitNew, Vector3>(u, u.position)).ToArray(), epsilon: epsClust, minimumPoints: 1);
-
-
-
-
-        foreach (var p in result.Clusters.Values)
-        {
-            clusterPos = Vector3.zero;
-            totalSoldiers = 0;
-
-
-            geom = (Polygon)new ConvexHull(p.SelectMany(u => u.Feature.Item1.rectangle).ToArray(), GeometryFactory.Default).GetConvexHull();
-            var coords = geom.Coordinates;
-            for (int j = 0; j < coords.Length - 1; j++)
-            {
-                Gizmos.DrawLine(new Vector3((float)coords[j].X, 5, (float)coords[j].Y),
-                                new Vector3((float)coords[j + 1].X, 5, (float)coords[j + 1].Y));
-            }
-
-
-
-
-            int i = 0;
-            foreach (var tuple in p)
-            {
-                u = tuple.Feature.Item1;
-                clusterPos += tuple.Feature.Item2;
-                totalSoldiers += u.numOfSoldiers;
-
-
-
-
-                //clusterWidth += u.width;
-
-                if (i++ != 0)
-                {
-
-
-
-
-
-                }
-
-
-            }
-
-            clusterPos = clusterPos / p.Count + Vector3.up * 5;
-
-            Handles.Label(clusterPos, 
-                "# Soldier: " + totalSoldiers + "\n" +
-                "Perimeter/Sold coedd: " + (geom.Length / totalSoldiers).ToString("F2")
-                );
-
-
-
-            Gizmos.DrawSphere(clusterPos, 0.5f);
-        }
-
-
-
-
-
-
-
-
-
-
-    }
-
-
 
 
 
@@ -223,6 +127,7 @@ public class ArmyNew : MonoBehaviour
         archerUnits = new List<ArcherNew>(archersStats.Count);
         cavalryUnits = new List<UnitNew>(cavalryStats.Count);
 
+
         float infantryLineDepth = 2 * GetHalfLenght(infantryStats.First().meleeHolder.soldierDistVertical, infantryStats.First().meleeHolder.startingCols);
 
         float infantryLineLength = 0;
@@ -236,6 +141,7 @@ public class ArmyNew : MonoBehaviour
         for (int i = 0; i < infantryStats.Count; i++)
         {
             Gizmos.color = Color.green;
+            
             Vector3 curPos = start * (i / c) + end * (1 - i / c);
             var u = infantryStats.ElementAt(i);
             if (debug)
@@ -288,7 +194,7 @@ public class ArmyNew : MonoBehaviour
             else
                 AddArcherAtPos(curPos, u, i);
         }
-
+ 
 
     }
 
@@ -437,6 +343,7 @@ public class ArmyNew : MonoBehaviour
 
   // RL INTEGRATION CODE BELOW
     private bool episodeOver = false;
+    private bool finalEpisodeSent = false;
 
     private BattleState battleState = BattleState.ONGOING;
 
@@ -458,7 +365,7 @@ public class ArmyNew : MonoBehaviour
             // Send final reward once at the end
             StartCoroutine(SendEndEpisode());
             battleState = BattleState.DEFEAT;
-            episodeOver = true;
+            episodeOver = false;
         }
 
         if (enemy.units.Count == 0)
@@ -466,27 +373,27 @@ public class ArmyNew : MonoBehaviour
             // Send final reward once at the end
             StartCoroutine(SendEndEpisode());
             battleState = BattleState.VICTORY;
-            episodeOver = true;
+            episodeOver = false;
         }
         
 
         // Send step data to Flask
         if (!episodeOver)
         {
-            StartCoroutine(SendStep(units, enemy.units));
+            StartCoroutine(SendStep());
         }
-        else
+        else if (episodeOver)
         {
             // Send final reward once at the end
             StartCoroutine(SendEndEpisode());
-            episodeOver = false;
+            
         }
           
     }
 
-    IEnumerator SendStep(List<UnitNew> alliedUnits, List<UnitNew> enemyUnits)
+    IEnumerator SendStep()
     {
-        var alliedUnitSteps = alliedUnits.Select(u => new UnitStep
+        var alliedUnitSteps = units.Select(u => new UnitStep
         {
             id = u.ID,
             commandedTarget = u.commandTarget != null ? u.commandTarget.ID : -1,
@@ -498,7 +405,7 @@ public class ArmyNew : MonoBehaviour
             position = new Vector3(u.position.x, u.position.y, u.position.z)
         }).ToList();
 
-        var enemyUnitSteps = enemyUnits.Select(u => new UnitStep
+        var enemyUnitSteps = enemy.units.Select(u => new UnitStep
         {
             id = u.ID,
             commandedTarget = u.commandTarget != null ? u.commandTarget.ID : -1,
@@ -510,13 +417,14 @@ public class ArmyNew : MonoBehaviour
             position = new Vector3(u.position.x, u.position.y, u.position.z)
         }).ToList();
         // Build JSON payload
-        var stepData = new Dictionary<string, object>
+        var stepData = new StepData
         {
-            {"allies", new List<UnitStep>[] {alliedUnitSteps}},
-            {"enemies", new List<UnitStep>[] {enemyUnitSteps}}
+            alliedUnitSteps = alliedUnitSteps,
+            enemyUnitSteps = enemyUnitSteps
         };
 
-        string json = JsonUtility.ToJson(new Wrapper<Dictionary<string, object>>(stepData));
+        string json = JsonUtility.ToJson(stepData);
+        Console.WriteLine(json);
 
         using (UnityWebRequest request = new UnityWebRequest(baseUrl + "/step", "POST"))
         {
@@ -540,9 +448,16 @@ public class ArmyNew : MonoBehaviour
 
     IEnumerator SendEndEpisode()
     {
+        if (finalEpisodeSent)
+        {
+            //Application.Quit();
+            yield break;
+        }
+
         float finalReward = battleState == BattleState.VICTORY ? 1.0f : -1.0f;
         var data = new FinalRewardData { final_reward = finalReward };
         string json = JsonUtility.ToJson(data);
+        
 
         using (UnityWebRequest request = new UnityWebRequest(baseUrl + "/end_episode", "POST"))
         {
@@ -552,6 +467,8 @@ public class ArmyNew : MonoBehaviour
             request.SetRequestHeader("Content-Type", "application/json");
 
             yield return request.SendWebRequest();
+            SceneManager.LoadScene(SceneManager.GetActiveScene().name);
+
 
             // if (request.result == UnityWebRequest.Result.Success)
             // {
@@ -562,12 +479,47 @@ public class ArmyNew : MonoBehaviour
             //     Debug.LogError("End episode error: " + request.error);
             // }
         }
+        episodeOver = false;
+            finalEpisodeSent = true;
+    }
+
+    IEnumerator GetNextEnemyStep()
+    {
+        using (UnityWebRequest request = new UnityWebRequest(baseUrl + "/end_episode", "POST"))
+        {
+            byte[] bodyRaw = Encoding.UTF8.GetBytes(json);
+            request.uploadHandler = new UploadHandlerRaw(bodyRaw);
+            request.downloadHandler = new DownloadHandlerBuffer();
+            request.SetRequestHeader("Content-Type", "application/json");
+
+            var result =  request.SendWebRequest();
+            var wait = new WaitUntil(() => result.isDone);
+            wait.moveNext();
+            if (request.result == UnityWebRequest.Result.Success)
+            {
+                string responseText = request.downloadHandler.text;
+                // interpret responseText as next action
+                StepResponse stepResponse = JsonUtility.FromJson<StepResponse>(responseText);
+                int nextAction = stepResponse.next_action;
+                // Process the next action as needed
+            }
+            else
+            {
+                Debug.LogError("Get next step error: " + request.error);
+            }
+        }
+
     }
 
 
     // Helper wrapper so Unity’s JsonUtility can handle dictionaries
-    [System.Serializable]
-    private class Wrapper<T> { public T data; public Wrapper(T d) { data = d; } }
+[Serializable]
+public class StepData
+{
+    [SerializeField] public List<UnitStep> alliedUnitSteps = new List<UnitStep>();
+    [SerializeField] public List<UnitStep> enemyUnitSteps = new List<UnitStep>();
+}
+
 
     [System.Serializable]
     private class StepResponse { public int next_action; }
